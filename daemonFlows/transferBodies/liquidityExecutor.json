@@ -1,0 +1,40 @@
+{
+  "auditReportId": "stillbit_audit_20250628_042",
+  "scannedAt": "2025-06-28T12:25:00Z",
+  "targetWallet": {
+    "address": "FJt8xk3qAsy3BGNq9YqTrRZ12eXbwV5rWh2hkShx9N3v",
+    "tags": ["🚩 high_risk", "⚡️ flash_activity"],
+    "firstSeen": "2025-06-19T07:12:00Z"
+  },
+  "overview": {
+    "txCountLast24h": 312,
+    "uniqueTokens": 18,
+    "newMints": 3,
+    "crossChainFlows": [],
+    "volumeMoved_SOL": 1987.43
+  },
+  "behaviorPatterns": [
+    {
+      "pattern": "Rapid Seeder",
+      "description": "Minted 3 tokens in under an hour"
+    },
+    {
+      "pattern": "Bridge Spinner",
+      "description": "Repeated bridge transfers with minimal delay"
+    },
+    {
+      "pattern": "Transfer Surge",
+      "description": "300+ tx in 24h—likely bot-driven"
+    }
+  ],
+  "alerts": {
+    "mintSpike": true,
+    "bridgeLoop": true,
+    "spamBurst": true
+  },
+  "stillbitRiskScore": {
+    "level": "High",
+    "scoreValue": 87,
+    "recommendation": "Escalate monitoring and impose rate limits on outbound transfers"
+  }
+}
