@@ -2,9 +2,6 @@
 import { Connection, PublicKey } from "@solana/web3.js"
 import { EventEmitter } from "events"
 
-/**
- * Configuration for the radar.
- */
 export interface VolatilityRadarConfig {
   rpcUrl: string
   tokenMints: PublicKey[]
@@ -13,9 +10,7 @@ export interface VolatilityRadarConfig {
   pollIntervalMs: number
 }
 
-/**
- * Represents a pulse event.
- */
+
 export interface VolatilityPulse {
   mint: string
   currentPrice: number
