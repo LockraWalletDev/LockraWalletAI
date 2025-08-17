@@ -1,11 +1,7 @@
-
-import { Connection, PublicKey, ParsedConfirmedTransaction } from "@solana/web3.js"
+import { Connection, PublicKey } from "@solana/web3.js"
 import { EventEmitter } from "events"
 import { VaultCoreEngine } from "./vaultCoreEngine"
 
-/**
- * Configuration for the surge detector.
- */
 export interface SurgeAetherConfig {
   rpcUrl: string
   watchTokens: PublicKey[]
@@ -14,9 +10,6 @@ export interface SurgeAetherConfig {
   aetherVaultConfig: Parameters<typeof VaultCoreEngine>[0]
 }
 
-/**
- * Represents a detected surge event.
- */
 export interface SurgeEvent {
   mint: string
   amountMoved: number
@@ -28,6 +21,8 @@ export interface SurgeEvent {
 export class SurgeAetherDetector extends EventEmitter {
   private connection: Connection
   private vaultEngine: VaultCoreEngine
+  private seenSignatures = new Set<string>()
+  private interval: NodeJS.Timer | null = null
 
   constructor(private config: SurgeAetherConfig) {
     super()
@@ -37,25 +32,38 @@ export class SurgeAetherDetector extends EventEmitter {
 
   async start(): Promise<void> {
     await this.vaultEngine.initialize()
-    setInterval(() => this.check(), this.config.pollIntervalMs)
+    this.interval = setInterval(() => this.check(), this.config.pollIntervalMs)
   }
 
   stop(): void {
+    if (this.interval) {
+      clearInterval(this.interval)
+      this.interval = null
+    }
     this.vaultEngine.removeAllListeners()
     this.removeAllListeners()
   }
 
   private async check(): Promise<void> {
-    const now = Date.now()
-    for (const mint of this.config.watchTokens) {
-      const sigs = await this.connection.getConfirmedSignaturesForAddress2(mint, { limit: 20 })
-      for (const sig of sigs) {
-        const tx = await this.connection.getParsedConfirmedTransaction(sig.signature)
-        if (!tx?.meta?.postTokenBalances) continue
-        const balances = tx.meta.postTokenBalances
-        for (const bal of balances) {
-          const amt = Number(bal.uiTokenAmount.uiAmount || 0)
-          if (amt >= this.config.surgeThreshold) {
+    try {
+      const now = Date.now()
+
+      for (const mint of this.config.watchTokens) {
+        const sigs = await this.connection.getConfirmedSignaturesForAddress2(mint, { limit: 20 })
+
+        for (const sig of sigs) {
+          if (this.seenSignatures.has(sig.signature)) continue
+          this.seenSignatures.add(sig.signature)
+
+          const tx = await this.connection.getParsedConfirmedTransaction(sig.signature)
+          if (!tx?.meta?.postTokenBalances) continue
+
+          for (const bal of tx.meta.postTokenBalances) {
+            if (!bal.mint || !this.config.watchTokens.some(m => m.toBase58() === bal.mint)) continue
+
+            const amt = Number(bal.uiTokenAmount?.uiAmount ?? 0)
+            if (isNaN(amt) || amt < this.config.surgeThreshold) continue
+
             const event: SurgeEvent = {
               mint: bal.mint,
               amountMoved: amt,
@@ -63,16 +71,19 @@ export class SurgeAetherDetector extends EventEmitter {
               destinationChain: "Aether",
               timestamp: now
             }
+
             this.emit("surge", event)
-            // Optionally route through vault
+
             await this.vaultEngine.executeTransfer({
               destination: this.config.aetherVaultConfig.vaultAddress,
               amount: amt,
-              tokenMint: mint
+              tokenMint: new PublicKey(bal.mint)
             })
           }
         }
       }
+    } catch (err) {
+      console.error("Surge check failed:", err)
     }
   }
 }
